@@ -5,7 +5,8 @@ import pymel.core as pm
 import re
 
 '''
-코어함수에서 체크박스에서 선택된 컨트롤러만 선택 할 수있도록 수정 진행하기.
+fk구조 이다보니깐 각각 체크박스 만들어도 전부다 선택은 되나 최상위만 선택되게 해도 될거 같기도 한데..
+그리고 여러개 매쉬 선택시에 여러개 컨트롤러 선택될 수 있게 수정 필요.
 
 
 '''
@@ -75,14 +76,23 @@ def build_controller_names(mesh_name):
 
     return ctrl_names
 
-def select_controllers_for_selected_mesh():
+def select_controllers_for_selected_mesh(selected_indices=None):
     sel = pm.selected()
     if not sel:
         pm.warning("매쉬를 먼저 선택해주세요.")
         return
 
     mesh = sel[0].name()
-    ctrl_names = build_controller_names(mesh)
+    all_ctrl_names = build_controller_names(mesh)
+
+    if not all_ctrl_names:
+        pm.warning("컨트롤러를 찾지 못했습니다.")
+        return
+
+    if selected_indices is not None:
+        ctrl_names = [name for i, name in enumerate(all_ctrl_names) if i in selected_indices]
+    else:
+        ctrl_name = all_ctrl_names
 
     if ctrl_names:
         pm.select(ctrl_names, r=True)
@@ -138,11 +148,14 @@ class SelectFeatherCtrlUI(QtWidgets.QDialog):
         main_layout.addWidget(self.button2)
 
     def create_connections(self):
-        self.button1.clicked.connect(select_controllers_for_selected_mesh)
+        self.button1.clicked.connect(self.select_checked_controllers)
         self.button2.clicked.connect(self.close)
 
     def select_checked_controllers(self):
-        pass
+        checkboxes = [self.checkbox0,self.checkbox1,self.checkbox2,self.checkbox3,self.checkbox4,self.checkbox5]
+        selected_indeices = [i for i,cb in enumerate(checkboxes) if cb.isChecked()]
+
+        select_controllers_for_selected_mesh(selected_indeices)
 
 
 def show_window():
@@ -155,4 +168,3 @@ def show_window():
 
     select_jimjo_feather_ctrl_window = SelectFeatherCtrlUI()
     select_jimjo_feather_ctrl_window.show()
-
