@@ -1,8 +1,13 @@
+
 import pymel.core as pm
 import importlib
 
 from core.utils import curve_library
 importlib.reload(curve_library)
+
+'''
+쉐이더까지 진행
+'''
 
 class CasperHelpers(object):
     @classmethod
@@ -32,11 +37,20 @@ class CasperHelpers(object):
         display_layer = pm.createDisplayLayer(name=name, empty=True)
 
         if reference:
-            pm.setAttr(f'{display_layer}',2)
+            pm.setAttr(f'{display_layer}.displayType',2)
         if members:
             pm.editDisplayLayerMembers(display_layer, members, noRecurse=True)
 
         return display_layer
+
+    @classmethod
+    def create_and_assign_lambert_shader(cls, name, shape_node):
+        shader = pm.shadingNode('lambert', name = name, asShader = True)
+        shader_sg = pm.sets(name=f'{shader}SG', renderable=True, noSurfaceShader=True, empty=True)
+        cls.connect_attr(shader,"outColor", shader_sg,"surfaceShader")
+        pm.sets(shader_sg, e=True, forceElement=[shape_node])
+
+        return shader
 
 
 class BallAutoRig(object):
@@ -54,6 +68,8 @@ class BallAutoRig(object):
         if parent:
             ball_geo = pm.parent(ball_geo,parent)[0]
 
+        self.create_ball_shader(ball_geo)
+
         return ball_geo
 
     def create_ball_ctrl(self, name, parent=None):
@@ -68,6 +84,28 @@ class BallAutoRig(object):
         ball_ctrl = pm.rename(ball_ctrl,name)
         return ball_ctrl
 
+    def create_ball_shader(self, ball_geo):
+        ball_shape = ball_geo.getShape()
+        print(ball_shape)
+        ball_shader = CasperHelpers.create_and_assign_lambert_shader("ballShader",ball_shape)
+
+        ramp = pm.shadingNode("ramp", name = 'ballRamp', asTexture=True)
+        CasperHelpers.set_attr(ramp,"interpolation",0)
+        CasperHelpers.set_attr(ramp,"colorEntryList[0].position", 0.0)
+        CasperHelpers.set_attr(ramp,"colorEntryList[0].color", self.primary_color, value_type="double3")
+        CasperHelpers.set_attr(ramp, "colorEntryList[1].position", 0.5)
+        CasperHelpers.set_attr(ramp, "colorEntryList[1].color", self.secondary_color, value_type="double3")
+
+        place2d_util = pm.shadingNode('place2dTexture',name='ballPlace2dTexture',asUtility=True)
+        CasperHelpers.set_attr(place2d_util,"repeatU",1)
+        CasperHelpers.set_attr(place2d_util, "repeatV", 3)
+
+        CasperHelpers.connect_attr(place2d_util,"outUV", ramp, "uv")
+        CasperHelpers.connect_attr(place2d_util, "outUvFilterSize", ramp, "uvFilterSize")
+
+        CasperHelpers.connect_attr(ramp,"outColor", ball_shader,"color")
+
+
     def construct_rig(self, name='ball'):
         pm.select(clear=True)
         root_grp = pm.group(name=name, empty=True, world=True)
@@ -77,6 +115,7 @@ class BallAutoRig(object):
         ball_ctrl = self.create_ball_ctrl('ball_ctrl',parent=anim_controls_grp)
 
         pm.parentConstraint(ball_ctrl,ball_geo,maintainOffset=True, weight=1)
+        print(type(ball_geo))
         CasperHelpers.create_display_layer("ball_geometry",[ball_geo], True)
 
 
@@ -85,5 +124,4 @@ class BallAutoRig(object):
 pm.newFile(force=True)
 ball = BallAutoRig()
 ball.construct_rig()
-
 
