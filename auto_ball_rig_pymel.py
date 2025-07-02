@@ -1,6 +1,8 @@
+from PySide2 import QtCore,QtWidgets,QtGui
 
 import pymel.core as pm
 import importlib
+
 
 from core.utils import curve_library
 importlib.reload(curve_library)
@@ -186,15 +188,118 @@ class BallAutoRig(object):
 
         pm.select(clear=True)
 
+class ColorButton(QtWidgets.QWidget):
+
+    color_changed = QtCore.Signal()
+
+    def __init__(self, color=(1.0, 1.0, 1.0), parent=None):
+        super(ColorButton, self).__init__(parent)
+        self._color = QtGui.QColor.fromRgbF(*color)
+        self.create_control()
+        self.set_size(50, 16)
+        self.set_color((color[0], color[1], color[2]))
+
+    def create_control(self):
+        self._color_button = QtWidgets.QPushButton()
+        self._color_button.setStyleSheet(f"background-color: {self._color.name()};")
+        self._color_button.clicked.connect(self.open_color_dialog)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._color_button)
+
+    def open_color_dialog(self):
+        color = QtWidgets.QColorDialog.getColor(self._color, self, "Select Color")
+        if color.isValid():
+            self._color = color
+            self._color_button.setStyleSheet(f"background-color: {color.name()};")
+            self.color_changed.emit()
+
+    def set_size(self, width, height):
+        self._color_button.setFixedSize(width, height)
+
+    def set_color(self, color):
+        self._color = QtGui.QColor.fromRgbF(*color)
+        self._color_button.setStyleSheet(f"background-color: {self._color.name()};")
+        self.color_changed.emit()
+
+    def get_color(self):
+        return (
+            self._color.redF(),
+            self._color.greenF(),
+            self._color.blueF()
+        )
 
 
+
+class BallAutoRigUi(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super(BallAutoRigUi, self).__init__(parent)
+        self.setMinimumWidth(300)
+
+        self.setWindowTitle("Ball Auto-Rig")
+        self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+
+        self.create_widget()
+        self.create_layout()
+        self.create_connections()
+
+    def create_widget(self):
+        self.name_le = QtWidgets.QLineEdit()
+        self.name_le.setPlaceholderText("ball")
+
+        self.primary_color_btn = ColorButton()
+        self.primary_color_btn.set_color((0.0,0.0,1.0))
+
+        self.secondary_color_btn = ColorButton()
+        self.secondary_color_btn.set_color((1.0,1.0,1.0))
+
+        self.create_btn = QtWidgets.QPushButton("Create")
+        self.close_btn = QtWidgets.QPushButton("Close")
+
+    def create_layout(self):
+        options_layout = QtWidgets.QFormLayout()
+        options_layout.addRow("Name:", self.name_le)
+        options_layout.addRow("Primary:", self.primary_color_btn)
+        options_layout.addRow("Secondary:", self.secondary_color_btn)
+
+        options_grp = QtWidgets.QGroupBox("Options")
+        options_grp.setLayout(options_layout)
+
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(self.create_btn)
+        button_layout.addWidget(self.close_btn)
+
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.addWidget(options_grp)
+        main_layout.addStretch()
+        main_layout.addLayout(button_layout)
+
+    def create_connections(self):
+        self.create_btn.clicked.connect(self.create_ball)
+        self.close_btn.clicked.connect(self.close)
+
+    def create_ball(self):
+        name = self.name_le.text()
+        if not name:
+            name = self.name_le.placeholderText()
+
+        primary_color = self.primary_color_btn.get_color()
+        secondary_color = self.secondary_color_btn.get_color()
+
+        ball_auto_rig = BallAutoRig()
+        ball_auto_rig.set_colors(primary_color,secondary_color)
+        ball_auto_rig.construct_rig(name)
 
 
 
 
 
 pm.newFile(force=True)
-ball = BallAutoRig()
-ball.construct_rig()
+#ball = BallAutoRig()
+#ball.construct_rig()
 
+ballUi = BallAutoRigUi()
+ballUi.show()
 
