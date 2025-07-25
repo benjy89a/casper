@@ -3,11 +3,8 @@ from PySide2 import QtCore, QtWidgets
 
 import pymel.core as pm
 import re
-
 '''
-fk구조 이다보니깐 각각 체크박스 만들어도 전부다 선택은 되나 최상위만 선택되게 해도 될거 같기도 한데..
-그리고 여러개 매쉬 선택시에 여러개 컨트롤러 선택될 수 있게 수정 필요.
-
+실행문 전역변수 삭제 및 로직 수정하기
 
 '''
 
@@ -33,6 +30,8 @@ def convert_mesh_to_ctrl_prefix(mesh_name):
     """
     매쉬 이름 → 컨트롤러 접두사, 부위, 번호 추출
     """
+
+    mesh_name = mesh_name.split(":")[-1]
     side_map = {"lf": "lt", "rt": "rt", "cn": "cn"}
     side_match = re.search(r"jimjo_hi_(lf|rt|cn)_", mesh_name)
     side = side_map.get(side_match.group(1), "lt") if side_match else "lt"
@@ -50,7 +49,7 @@ def convert_mesh_to_ctrl_prefix(mesh_name):
 
     return side, part, number_raw
 
-def build_controller_names(mesh_name):
+def build_controller_names(mesh_name, name_space=""):
     side, part, number_raw = convert_mesh_to_ctrl_prefix(mesh_name)
     if not all([side, part, number_raw]):
         return []
@@ -71,8 +70,10 @@ def build_controller_names(mesh_name):
         else:
             name = f"{side}_feather_{part}_proxy_{number}_crv_drv_jnt_{i}_ctrl"
 
-        if pm.objExists(name):
-            ctrl_names.append(name)
+        full_name = f"{name_space}:{name}" if name_space else name
+
+        if pm.objExists(full_name):
+            ctrl_names.append(full_name)
 
     return ctrl_names
 
@@ -82,21 +83,24 @@ def select_controllers_for_selected_mesh(selected_indices=None):
         pm.warning("매쉬를 먼저 선택해주세요.")
         return
 
-    mesh = sel[0].name()
-    all_ctrl_names = build_controller_names(mesh)
+    all_ctrl_names = []
+    for mesh_node in sel:
 
-    if not all_ctrl_names:
-        pm.warning("컨트롤러를 찾지 못했습니다.")
-        return
+        mesh = mesh_node.name()
+        name_space = mesh_node.namespace().rstrip(":")
+        ctrl_names = build_controller_names(mesh,name_space)
 
-    if selected_indices is not None:
-        ctrl_names = [name for i, name in enumerate(all_ctrl_names) if i in selected_indices]
-    else:
-        ctrl_name = all_ctrl_names
+        print(ctrl_names)
 
-    if ctrl_names:
-        pm.select(ctrl_names, r=True)
-        print(f"선택된 컨트롤러: {ctrl_names}")
+        if selected_indices is not None:
+            ctrl_names = [name for i, name in enumerate(ctrl_names) if i in selected_indices]
+
+        all_ctrl_names.extend(ctrl_names)
+
+
+    if all_ctrl_names:
+        pm.select(all_ctrl_names, r=True)
+        print(f"선택된 컨트롤러: {all_ctrl_names}")
     else:
         pm.warning("컨트롤러를 찾지 못했습니다.")
 
@@ -125,12 +129,15 @@ class SelectFeatherCtrlUI(QtWidgets.QDialog):
         self.button1 = QtWidgets.QPushButton("Mesh")
         self.button2 = QtWidgets.QPushButton("Close")
 
+        self.checkbox_all = QtWidgets.QCheckBox("check_all")
+
         self.checkbox0.setChecked(True)
         self.checkbox1.setChecked(True)
         self.checkbox2.setChecked(True)
         self.checkbox3.setChecked(True)
         self.checkbox4.setChecked(True)
         self.checkbox5.setChecked(True)
+        self.checkbox_all.setChecked(True)
 
     def create_layouts(self):
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -142,20 +149,38 @@ class SelectFeatherCtrlUI(QtWidgets.QDialog):
         check_layout.addWidget(self.checkbox4)
         check_layout.addWidget(self.checkbox5)
 
+        check_all_layout = QtWidgets.QHBoxLayout(self)
+        check_all_layout.addStretch()
+        check_all_layout.addWidget(self.checkbox_all)
+        check_all_layout.addStretch()
+
         main_layout.addLayout(check_layout)
+        main_layout.addLayout(check_all_layout)
 
         main_layout.addWidget(self.button1)
         main_layout.addWidget(self.button2)
 
     def create_connections(self):
+        self.checkbox_all.stateChanged.connect(self.on_all_checked)
         self.button1.clicked.connect(self.select_checked_controllers)
         self.button2.clicked.connect(self.close)
+
 
     def select_checked_controllers(self):
         checkboxes = [self.checkbox0,self.checkbox1,self.checkbox2,self.checkbox3,self.checkbox4,self.checkbox5]
         selected_indeices = [i for i,cb in enumerate(checkboxes) if cb.isChecked()]
 
+        if not selected_indeices:
+            pm.warning("하나 이상의 컨트롤러 체크박스를 선택해주세요.")
+            return
+
         select_controllers_for_selected_mesh(selected_indeices)
+        pm.setFocus("modelPanel4")
+
+    def on_all_checked(self,state):
+        check = (state == QtCore.Qt.Checked)
+        for cb in [self.checkbox0,self.checkbox1,self.checkbox2,self.checkbox3,self.checkbox4,self.checkbox5]:
+            cb.setChecked(check)
 
 
 def show_window():
