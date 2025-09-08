@@ -1,9 +1,13 @@
-
 import pymel.core as pm
 '''
-연결을 하기위한 필요한 데이터들의 리스트를 가져오는건 했는데 지금 보면 리스트끼리 순서가 맵핑이 다르게 되어 있는문제가 하나 있음
-네이밍으로 작업을 해야하는거 같은데 네이밍 말고 어떻게 처리할지 모르겠음
-
+    상단의 3개의 함수는 uber그룹을 찾고 만들기위한 함수로 환경 탐색 및 준비 단계 이고 아래쪽 함수 2개는 연결해주는걸로 fk_data_list를 만들어서 전달
+    즉 준비단계와 연결단계가 분리되어 있는 상황
+    
+    fk구조에서 중간에 컨스트레인이 걸려서 부모의 위치값을 자식에게 전달을 못하는데 uber라는 트랜스폼이 이동값을 계산해서 넘겨주는 구조로 총 4개의 트랜스폼이
+    매트릭스로 곱해서 계산을 해준다.
+    
+    컨스트레인된 부모그룹, 부모 컨트롤러, 컨스트레인된 자식 그룹, 자식의 uber 가 필요 곱샘순서는 아래 코드 참조
+    
 '''
 def get_fk_controls_from_root(root):
     shapes = pm.listRelatives(root, ad=True, type='nurbsCurve') or []
@@ -15,7 +19,6 @@ def get_fk_controls_from_root(root):
 
     ctrls = list(ctrls_set)
     return ctrls
-
 
 def get_constrained_transforms(root):
     transforms = pm.listRelatives(root,ad=True, type='transform') or []
@@ -59,43 +62,40 @@ def insert_uber_transform(constrained_transforms):
 
     return uber_grps
 
-import importlib
-import sys
 
-sys.path.append(r'/home/mago/casper')
+def create_fk_uber(fk_data):
 
-import create_fk_uber as uber
-importlib.reload(uber)
-
-import pymel.core as pm
+    constrained_parent_transform = fk_data[0]
+    parent_ctrl = fk_data[1]
+    constrained_child_transform = fk_data[2]
+    uber_grp = fk_data[3]
 
 
-sel = pm.PyNode('lt_toe_3_ctrl_grp')
+    mm_uber_con_0 = pm.createNode('multMatrix',name =f'{uber_grp}_multMatrix_0')
+    mm_uber_con_1 = pm.createNode('multMatrix',name =f'{uber_grp}_multMatrix_1')
+    mm_uber_con_2 = pm.createNode('multMatrix',name =f'{uber_grp}_multMatrix_2')
+    dm_uber_con = pm.createNode('decomposeMatrix', name = f'{uber_grp}_decomposeMatrix')
 
-a = uber.get_fk_controls_from_root(sel)
-b = uber.get_constrained_transforms(sel)
-uber_grps = uber.insert_uber_transform(b)
+    pm.connectAttr(constrained_child_transform.worldMatrix[0] ,mm_uber_con_0.matrixIn[0],force=True)
+    pm.connectAttr(constrained_parent_transform.worldInverseMatrix[0], mm_uber_con_0.matrixIn[1],force=True)
+    pm.connectAttr(mm_uber_con_0.matrixSum,mm_uber_con_1.matrixIn[0], force = True)
+    pm.connectAttr(parent_ctrl.worldMatrix[0],mm_uber_con_1.matrixIn[1], force = True)
+    pm.connectAttr(mm_uber_con_1.matrixSum,mm_uber_con_2.matrixIn[0], force=True)
+    pm.connectAttr(constrained_child_transform.worldInverseMatrix[0],mm_uber_con_2.matrixIn[1], force=True)
+    pm.connectAttr(mm_uber_con_2.matrixSum,dm_uber_con.inputMatrix, force=True)
 
+    pm.connectAttr(dm_uber_con.outputTranslate,uber_grp.translate,force=True)
+    pm.connectAttr(dm_uber_con.outputRotate, uber_grp.rotate, force=True)
 
-uber_grp = uber_grps[0]
-constrained_child_transform = b[0]
-constrained_parent_transform = b[4]
-parent_ctrl = a[3]
+def create_fk_uber_batch(fk_data_list):
+    '''
+    fk_data_list = [
+        [constrained_parent_transform1, parent_ctrl1, constrained_child_transform1, uber_grp1],
+        [constrained_parent_transform2, parent_ctrl2, constrained_child_transform2, uber_grp2],
+        ...
+    ]
+    '''
 
-mm_uber_con_0 = pm.createNode('multMatrix',name =f'{uber_grp}_multMatrix_0')
-mm_uber_con_1 = pm.createNode('multMatrix',name =f'{uber_grp}_multMatrix_1')
-mm_uber_con_2 = pm.createNode('multMatrix',name =f'{uber_grp}_multMatrix_2')
-dm_uber_con = pm.createNode('decomposeMatrix', name = f'{uber_grp}_decomposeMatrix')
-
-pm.connectAttr(constrained_child_transform.worldMatrix[0] ,mm_uber_con_0.matrixIn[0],force=True)
-pm.connectAttr(constrained_parent_transform.worldInverseMatrix[0], mm_uber_con_0.matrixIn[1],force=True)
-pm.connectAttr(mm_uber_con_0.matrixSum,mm_uber_con_1.matrixIn[0], force = True)
-pm.connectAttr(parent_ctrl.worldMatrix[0],mm_uber_con_1.matrixIn[1], force = True)
-pm.connectAttr(mm_uber_con_1.matrixSum,mm_uber_con_2.matrixIn[0], force=True)
-pm.connectAttr(constrained_child_transform.worldInverseMatrix[0],mm_uber_con_2.matrixIn[1], force=True)
-pm.connectAttr(mm_uber_con_2.matrixSum,dm_uber_con.inputMatrix, force=True)
-
-pm.connectAttr(dm_uber_con.outputTranslate,uber_grp.translate,force=True)
-pm.connectAttr(dm_uber_con.outputRotate, uber_grp.rotate, force=True)
-
+    for fk_data in fk_data_list:
+        create_fk_uber(fk_data)
 
