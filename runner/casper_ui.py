@@ -239,6 +239,16 @@ def launch():
         casper_runner_instance.close()
         casper_runner_instance.deleteLater()
 
+    # 프로젝트 루트 경로를 sys.path에 추가하여 다른 모듈을 임포트할 수 있도록 합니다.
+    # 이 스크립트(casper_ui.py)는 runner 폴더 안에 있으므로,
+    # os.path.dirname(os.path.abspath(__file__))은 'runner' 폴더 경로를 반환합니다.
+    # 여기서 한 번 더 os.path.dirname을 사용하여 'casper' 프로젝트 루트 경로를 얻습니다.
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(project_root)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+        print(f"프로젝트 루트 경로를 sys.path에 추가했습니다: {project_root}")
+
     folder_to_load = read_config()
 
     # 설정 파일에 유효한 경로가 없으면 사용자에게 폴더 선택을 요청
