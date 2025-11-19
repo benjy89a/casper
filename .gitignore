@@ -1,3 +1,18 @@
-ignore_test.txt
+# 가상 환경
 .venv/
+venv/
+env/
+
 GEMINI.md
+
+# 파이썬 관련
+__pycache__/
+*.pyc
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+
+# OS 및 편집기 임시 파일
+.DS_Store
+*~
+.vscode/
